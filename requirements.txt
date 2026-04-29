@@ -1,0 +1,6 @@
+django
+bcrypt
+pyjwt
+pika
+requests
+python-consul

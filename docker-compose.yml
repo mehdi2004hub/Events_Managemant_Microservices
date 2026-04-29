@@ -1,0 +1,109 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5673:5672"
+      - "15674:15672"
+    networks:
+      - billetix-network
+
+  consul:
+    image: hashicorp/consul:latest
+    ports:
+      - "8500:8500"
+    command: "agent -dev -client=0.0.0.0"
+    networks:
+      - billetix-network
+
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8090:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - billetix-network
+
+  auth-service:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      - JWT_SECRET=test-jwt-secret-key-123
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=PathPrefix(`/api/auth`)"
+      - "traefik.http.services.auth.loadbalancer.server.port=8000"
+    networks:
+      - billetix-network
+    depends_on:
+      - consul
+
+  event-service:
+    build: .
+    volumes:
+      - ./mnt/user-data/outputs/billetix-django-v2/services/event-service:/app
+    working_dir: /app
+    command: python manage.py runserver 0.0.0.0:8001
+    environment:
+      - JWT_SECRET=test-jwt-secret-key-123
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.event.rule=PathPrefix(`/api/events`)"
+      - "traefik.http.services.event.loadbalancer.server.port=8001"
+    networks:
+      - billetix-network
+    depends_on:
+      - consul
+
+  booking-service:
+    build: .
+    volumes:
+      - ./mnt/user-data/outputs/billetix-django-v2/services/booking-service:/app
+    working_dir: /app
+    command: python manage.py runserver 0.0.0.0:8002
+    environment:
+      - JWT_SECRET=test-jwt-secret-key-123
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.booking.rule=PathPrefix(`/api/bookings`)"
+      - "traefik.http.services.booking.loadbalancer.server.port=8002"
+    networks:
+      - billetix-network
+    depends_on:
+      - rabbitmq
+      - consul
+
+  email-worker:
+    build: .
+    command: python worker.py
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    networks:
+      - billetix-network
+    depends_on:
+      - rabbitmq
+
+  frontend:
+    build:
+      context: ./frontend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    networks:
+      - billetix-network
+    depends_on:
+      - auth-service
+      - event-service
+      - booking-service
+
+networks:
+  billetix-network:
+    driver: bridge
