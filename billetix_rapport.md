@@ -42,14 +42,14 @@ numbersections: true
 
 L'architecture de Billetix est composée de **8 services Docker** interconnectés au sein d'un réseau bridge `billetix-network`.
 
-- **Traefik** (port 80/8080) : point d'entrée unique, reverse proxy dynamique
-- **Auth-Service** (port interne 8000) : authentification et gestion JWT
-- **Event-Service** (port interne 8001) : CRUD des événements
-- **Booking-Service** (port interne 8002) : gestion des réservations
-- **Email-Worker** : consommateur RabbitMQ pour les notifications email
-- **Frontend** : application React/TypeScript servie par Nginx
-- **Consul** (port 8500) : service registry et health checks
-- **RabbitMQ** (ports 5672/15672) : message broker asynchrone
+- **Traefik** (port 8090/8080) : point d'entrée unique (Gateway), reverse proxy dynamique.
+- **Auth-Service** (port interne 8000) : authentification et gestion centralisée des tokens JWT.
+- **Event-Service** (port interne 8001) : gestion du catalogue d'événements et des stocks de places.
+- **Booking-Service** (port interne 8002) : orchestration des réservations et communication asynchrone.
+- **Email-Worker** : consommateur RabbitMQ dédié au traitement des notifications.
+- **Frontend** : application React/TypeScript (Vite) avec un design premium.
+- **Consul** (port 8500) : annuaire de services (Service Discovery).
+- **RabbitMQ** (ports 5673/15674) : bus d'événements asynchrone (AMQP).
 
 ## Diagramme de Séquence — Flux de Réservation
 
@@ -179,6 +179,17 @@ Ce diagramme présente le flux d'activités côté client, système API et worke
 }
 ```
 
+---
+
+## Gateway & Routage (Traefik)
+
+| Préfixe URL | Service cible | Test de santé (Health) |
+|-------------|---------------|------------------------|
+| `/api/auth` | auth-service | `/api/auth/health/` |
+| `/api/events` | event-service | `/api/events/health/` |
+| `/api/bookings` | booking-service | `/api/bookings/health/` |
+| `/` | frontend | `http://localhost:5173/` |
+
 \newpage
 
 # Modélisation UML
@@ -191,357 +202,125 @@ Le diagramme de classes ci-dessous représente les entités principales du syst�
 
 ---
 
-## Frontend
+## Frontend & Design Premium
 
-Application React + TypeScript servie via Nginx.
+Application React + TypeScript servie via Vite.
 
 | Route | Description |
 |-------|-------------|
-| / | Liste des événements publics |
-| /login | Connexion utilisateur |
-| /register | Inscription |
-| /events | Gestion événements (ORGANIZER) |
-| /bookings | Mes réservations (CLIENT) |
+| / | Landing page avec Hero dynamique et liste des événements |
+| /login | Interface d'authentification unifiée (Login/Register) |
+| /events/:id | Détails de l'événement et interface de réservation |
+| /mes-reservations | Dashboard personnel (CLIENT) |
+
+### Identité Visuelle : "Cosmic Premium"
+
+L'interface a été conçue pour offrir une expérience immersive dépassant le cadre d'un simple MVP :
+
+- **Thème** : Dark-first avec des accents Indigo et Violet.
+- **Glassmorphism** : Utilisation de `backdrop-filter: blur(20px)` pour un effet de profondeur.
+- **Gradients** : Grilles de dégradés dynamiques (Mesh Background).
+- **Animations** : Transitions fluides gérées par **Framer Motion**.
 
 \newpage
 
-# Guide de Tests Postman
+# Validation Fonctionnelle via l'Interface Web
+
+Cette section décrit comment valider l'intégration des microservices directement depuis la plateforme Billetix.
+
+## Scénario 1 : Cycle de Réservation (Client)
+L'interface permet de tester la communication entre l'**Event-Service**, le **Booking-Service** et **RabbitMQ**.
+
+1. **Découverte** : Sur la page d'accueil, l'utilisateur parcourt les événements récupérés dynamiquement depuis l'Event-Service.
+2. **Détails & Disponibilité** : En cliquant sur un événement, le système affiche les places disponibles.
+3. **Réservation** : L'utilisateur clique sur "Réserver". Le Booking-Service :
+   * Valide le stock de places.
+   * Décrémente les places dans l'Event-Service.
+   * Publie un message dans RabbitMQ pour l'Email-Worker.
+4. **Dashboard personnel** : L'utilisateur retrouve son billet avec le statut "CONFIRMED" dans son espace personnel.
+
+## Scénario 2 : Gestion Organisateur (RBAC)
+Le système applique les contraintes de sécurité (JWT + Rôles) directement dans l'UI.
+
+1. **Accès Restreint** : Si un utilisateur "CLIENT" tente d'accéder au formulaire de création, le système redirige vers une page d'accès refusé (Validation 403).
+2. **Publication** : Un "ORGANISATEUR" dispose d'un bouton "CRÉER" lui permettant d'ajouter un nouvel événement via un formulaire glassmorphic.
+
+## Scénario 3 : Résilience et Asynchronisme
+1. L'utilisateur effectue une réservation.
+2. Même si l'envoi d'email prend du temps ou si le worker est redémarré, la réservation est confirmée instantanément pour l'utilisateur. 
+3. Le message reste stocké en sécurité dans **RabbitMQ** jusqu'à son traitement.
+
+\newpage
+
+# Guide de Tests Postman & Validation
 
 ## Configuration de l'Environnement
 
-Dans Postman, allez dans **Environments > New** et créez ces variables :
-
-| Variable | Valeur initiale |
-|----------|----------------|
-| BASE_URL | http://localhost |
-| ACCESS_TOKEN | (vide) |
-| REFRESH_TOKEN | (vide) |
-| EVENT_ID | (vide) |
+Dans Postman, utilisez les variables pour automatiser vos tests : `BASE_URL` (`http://localhost:8090/api`) et `ACCESS_TOKEN`.
 
 ---
 
-## Tests — Auth Service
+## Tests — Auth Service (Sécurité & JWT)
 
-### Test 1 : Register
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | POST |
-| URL | `{{BASE_URL}}/api/auth/register/` |
-| Header | `Content-Type: application/json` |
-
-**Body (raw > JSON) :**
-
+### Étape 1 : Register (`POST /api/auth/register/`)
+**Body (JSON)**:
 ```json
 {
-  "email": "organisateur@billetix.com",
-  "password": "Secure123",
-  "firstName": "Alice",
-  "lastName": "Dupont",
+  "email": "organisateur@billetix.dz",
+  "password": "password123",
+  "firstName": "Mehdi",
+  "lastName": "Khedim",
   "role": "ORGANIZER"
 }
 ```
 
-**Réponse attendue :** `201 Created`
-
-**Script Tests (onglet Tests) :**
-
-```javascript
-pm.test("Status 201", () => pm.response.to.have.status(201));
-const json = pm.response.json();
-pm.environment.set("ACCESS_TOKEN", json.access);
-pm.environment.set("REFRESH_TOKEN", json.refresh);
-```
+### Étape 2 : Login (`POST /api/auth/login/`)
+ **Action** : Copiez la valeur de `access` et collez-la dans l'onglet **Authorization > Bearer Token** des requêtes suivantes.
 
 ---
 
-### Test 2 : Login
+## Tests — Event Service (Rôles & RBAC)
 
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | POST |
-| URL | `{{BASE_URL}}/api/auth/login/` |
-| Header | `Content-Type: application/json` |
-
-**Body :** `{ "email": "organisateur@billetix.com", "password": "Secure123" }`
-
-**Réponse attendue :** `200 OK`
-
-**Script Tests :**
-
-```javascript
-pm.test("Status 200", () => pm.response.to.have.status(200));
-const json = pm.response.json();
-pm.environment.set("ACCESS_TOKEN", json.access);
-pm.environment.set("REFRESH_TOKEN", json.refresh);
-```
-
----
-
-### Test 3 : Profil (Me)
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | GET |
-| URL | `{{BASE_URL}}/api/auth/me/` |
-| Header | `Authorization: Bearer {{ACCESS_TOKEN}}` |
-
-**Réponse attendue :** `200 OK`
-
-**Script Tests :**
-
-```javascript
-pm.test("Status 200", () => pm.response.to.have.status(200));
-pm.test("Rôle correct", () => {
-    pm.expect(pm.response.json().role).to.eql("ORGANIZER");
-});
-```
-
----
-
-### Test 4 : Refresh Token
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | POST |
-| URL | `{{BASE_URL}}/api/auth/refresh/` |
-
-**Body :** `{ "refresh": "{{REFRESH_TOKEN}}" }`
-
-**Script Tests :**
-
-```javascript
-pm.test("Nouveau token reçu", () => {
-    const json = pm.response.json();
-    pm.expect(json.access).to.be.a('string');
-    pm.environment.set("ACCESS_TOKEN", json.access);
-});
-```
-
----
-
-### Test 5 : Sécurité — Accès refusé sans token
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | GET |
-| URL | `{{BASE_URL}}/api/auth/me/` |
-| Header | *(aucun Authorization)* |
-
-**Réponse attendue :** `401 Unauthorized`
-
----
-
-## Tests — Event Service
-
-### Test 6 : Créer un Événement
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | POST |
-| URL | `{{BASE_URL}}/api/events/` |
-| Headers | `Content-Type: application/json` + `Authorization: Bearer {{ACCESS_TOKEN}}` |
-
-**Body :**
-
+### Étape 3 : Créer un Événement (Succès Organisateur)
+**Body (JSON)**:
 ```json
 {
-  "title": "Festival Tech Alger 2025",
-  "description": "La plus grande conférence tech d'Algérie",
-  "date": "2025-09-15T10:00:00Z",
-  "location": "Alger Convention Center",
-  "capacity": 500,
-  "price": 1500.00,
+  "title": "Cosmic Tech Night",
+  "description": "Une immersion dans le futur de la tech.",
+  "date": "2026-06-15T21:00:00Z",
+  "location": "Alger, Cyber Parc",
+  "capacity": 300,
+  "price": "3500.00",
   "category": "Technologie"
 }
 ```
 
-**Réponse attendue :** `201 Created`
-
-**Script Tests :**
-
-```javascript
-pm.test("Événement créé", () => pm.response.to.have.status(201));
-pm.environment.set("EVENT_ID", pm.response.json().id);
-```
+### Étape 4 : Test Forbidden (Refus Client)
+Tentez la même requête avec un compte `CLIENT`.
+ **Attendu** : `403 Forbidden`. Prouve le respect du **RBAC**.
 
 ---
 
-### Test 7 : Lister les Événements
+## Tests — Booking Service (RabbitMQ & Async)
 
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | GET |
-| URL | `{{BASE_URL}}/api/events/` |
-
-**Réponse attendue :** `200 OK`, tableau JSON
-
-**Script Tests :**
-
-```javascript
-pm.test("Status 200", () => pm.response.to.have.status(200));
-pm.test("Liste non vide", () => {
-    pm.expect(pm.response.json().length).to.be.above(0);
-});
-```
-
----
-
-### Test 8 : Détail d'un Événement
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | GET |
-| URL | `{{BASE_URL}}/api/events/{{EVENT_ID}}/` |
-
-**Réponse attendue :** `200 OK`, objet JSON de l'événement
-
----
-
-### Test 9 : Refus de Création (CLIENT)
-
-1. Inscrivez un compte `"role": "CLIENT"` via Test 1
-2. Connectez-vous et récupérez son token
-3. Tentez `POST /api/events/` avec ce token CLIENT
-
-**Réponse attendue :** `403 Forbidden`
-
----
-
-## Tests — Booking Service
-
-### Test 10 : Créer une Réservation
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | POST |
-| URL | `{{BASE_URL}}/api/bookings/` |
-| Headers | `Content-Type: application/json` + `Authorization: Bearer {{ACCESS_TOKEN}}` |
-
-**Body :**
-
+### Étape 5 : Créer une Réservation (`POST /api/bookings/`)
+**Body (JSON)**:
 ```json
 {
-  "event_id": "{{EVENT_ID}}",
-  "quantity": 2
+  "eventId": "UUID_DE_L_EVENEMENT",
+  "quantity": 1
 }
 ```
-
-**Réponse attendue :** `201 Created`
-
-**Script Tests :**
-
-```javascript
-pm.test("Réservation créée", () => pm.response.to.have.status(201));
-pm.test("Status PENDING", () => {
-    pm.expect(pm.response.json().status).to.eql("PENDING");
-});
-```
-
----
-
-### Test 11 : Mes Réservations
-
-| Paramètre | Valeur |
-|-----------|--------|
-| Méthode | GET |
-| URL | `{{BASE_URL}}/api/bookings/me/` |
-| Header | `Authorization: Bearer {{ACCESS_TOKEN}}` |
-
-**Réponse attendue :** `200 OK`, liste JSON des réservations
-
-\newpage
-
-# Infrastructure et Déploiement
-
-## Docker Compose
-
-### Démarrage complet
-
-```bash
-docker-compose up --build
-```
-
-### Vérification des conteneurs actifs
-
-```bash
-docker ps --format "table {{.Names}}\t{{.Status}}"
-```
-
-### Services déployés
-
-| Service | Image | Ports exposés |
-|---------|-------|---------------|
-| traefik | traefik:v2.10 | 80, 8080 |
-| consul | consul:latest | 8500 |
-| rabbitmq | rabbitmq:3-management | 5672, 15672 |
-| auth-service | Build local (Django) | via Traefik |
-| event-service | Build local (Django) | via Traefik |
-| booking-service | Build local (Django) | via Traefik |
-| email-worker | Build local (Python) | — |
-| frontend | Build local (React/Nginx) | via Traefik |
-
----
-
-## Tableau de Bord
-
-| Service | URL | Identifiants |
-|---------|-----|--------------|
-| Interface Web | http://localhost | — |
-| Traefik Dashboard | http://localhost:8080 | — |
-| Consul UI | http://localhost:8500 | — |
-| RabbitMQ Console | http://localhost:15672 | guest / guest |
-
----
-
-## Consul — Service Registry
-
-Consul assure la découverte de services dynamique. Chaque microservice s'enregistre au démarrage avec un health check HTTP. Le dashboard permet de visualiser l'état de santé en temps réel.
-
-## Traefik — Reverse Proxy
-
-| Préfixe URL | Service cible |
-|-------------|---------------|
-| /api/auth | auth-service |
-| /api/events | event-service |
-| /api/bookings | booking-service |
-| / | frontend |
-
-La configuration est dynamique via les labels Docker.
-
-## RabbitMQ — Communication Asynchrone
-
-Logs du worker email après une réservation :
-
-```bash
-docker-compose logs -f email-worker
-```
-
-Sortie attendue :
-
-```
-[x] Envoi d'email : BOOKING_CONFIRMATION à client@billetix.com
-```
+ **Attendu** : `201 Created`. Montrez les logs (`docker logs -f email-worker`) pour valider RabbitMQ.
 
 \newpage
 
 # Conclusion
 
-Le projet Billetix implémente avec succès une architecture microservices complète.
+Le projet Billetix implémente une architecture microservices complète, scalable et sécurisée, alliant la robustesse de Django, l'agilité de RabbitMQ et une interface React "Premium".
 
-| Critère | Solution | Résultat |
-|---------|----------|----------|
-| API REST CRUD | Django REST (3 services) | Conforme |
-| Authentification JWT | Auth-Service + bcrypt | Conforme |
-| Interface UI/UX | React + TypeScript | Conforme |
-| Communication asynchrone | RabbitMQ + Worker | Conforme |
-| Service Registry | HashiCorp Consul | Conforme |
-| Reverse Proxy | Traefik v2 | Conforme |
-| Déploiement multi-conteneurs | Docker Compose (8 containers) | Conforme |
-
-**Garanties architecturales :**
-
-- **Scalabilité :** chaque service est scalable indépendamment
-- **Résilience :** un service défaillant n'impacte pas les autres
-- **Découplage :** communication via API REST et RabbitMQ
-- **Sécurité :** JWT, bcrypt, protection anti-brute force
+**Points forts :**
+- Isolation via Traefik.
+- Sécurité JWT et RBAC.
+- Expérience utilisateur immersive.
+- Déploiement Docker fluide.
