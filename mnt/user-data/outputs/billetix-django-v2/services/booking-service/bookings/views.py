@@ -51,7 +51,7 @@ def booking_create(request):
         # 1. Check Event Service (Simulated or Real URL)
         # In a real environment, this might be 'http://event-service:8000/api/events/{event_id}/'
         # For testing, we might use localhost if both are running.
-        event_url = f"http://localhost:8001/api/events/{event_id}/"
+        event_url = f"http://event-service:8001/api/events/{event_id}/"
         resp = requests.get(event_url)
         if not resp.ok:
             return JsonResponse({"error": "Event not found"}, status=resp.status_code)
@@ -61,7 +61,11 @@ def booking_create(request):
             return JsonResponse({"error": "Not enough seats available"}, status=409)
 
         # 2. Update Event Service (Decrement seats)
-        # In a real scenario, this should be atomic, but here we simulate a simple patch
+        decrement_url = f"http://event-service:8001/api/events/{event_id}/decrement/"
+        patch_resp = requests.patch(decrement_url, json={"quantity": quantity})
+        if not patch_resp.ok:
+            return JsonResponse({"error": "Failed to update available seats"}, status=500)
+            
         # Total price calculation
         total_price = float(event_data["price"]) * quantity
         

@@ -32,9 +32,10 @@ services:
 
   auth-service:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: sh -c "python register_service.py auth-service 8000 & python manage.py runserver 0.0.0.0:8000"
     environment:
       - JWT_SECRET=test-jwt-secret-key-123
+      - CONSUL_HOST=consul
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.auth.rule=PathPrefix(`/api/auth`)"
@@ -49,9 +50,10 @@ services:
     volumes:
       - ./mnt/user-data/outputs/billetix-django-v2/services/event-service:/app
     working_dir: /app
-    command: python manage.py runserver 0.0.0.0:8001
+    command: sh -c "python register_service.py event-service 8001 & python manage.py runserver 0.0.0.0:8001"
     environment:
       - JWT_SECRET=test-jwt-secret-key-123
+      - CONSUL_HOST=consul
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.event.rule=PathPrefix(`/api/events`)"
@@ -66,10 +68,11 @@ services:
     volumes:
       - ./mnt/user-data/outputs/billetix-django-v2/services/booking-service:/app
     working_dir: /app
-    command: python manage.py runserver 0.0.0.0:8002
+    command: sh -c "python register_service.py booking-service 8002 & python manage.py runserver 0.0.0.0:8002"
     environment:
       - JWT_SECRET=test-jwt-secret-key-123
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - CONSUL_HOST=consul
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.booking.rule=PathPrefix(`/api/bookings`)"

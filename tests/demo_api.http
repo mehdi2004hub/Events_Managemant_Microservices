@@ -1,0 +1,101 @@
+### Billetix API Demo - Jury Presentation
+# Ce fichier peut être exécuté via l'extension "REST Client" de VS Code.
+# Base URL: http://localhost:8090/api
+
+@baseUrl = http://localhost:8090/api
+
+### 1. Health Check (Service Discovery / Traefik Proof)
+GET {{baseUrl}}/auth/health/
+Accept: application/json
+
+### 2. Inscription d'un Organisateur
+# @name registerOrganizer
+POST {{baseUrl}}/auth/register/
+Content-Type: application/json
+
+{
+    "email": "organisateur.demo@billetix.dz",
+    "password": "password123",
+    "firstName": "Mehdi",
+    "lastName": "Jury",
+    "role": "ORGANIZER"
+}
+
+### 3. Connexion (Récupération du Token)
+# @name login
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+    "email": "organisateur.demo@billetix.dz",
+    "password": "password123"
+}
+
+@token = {{login.response.body.access}}
+
+### 4. Création d'un Événement (Preuve RBAC - OK pour Organizer)
+POST {{baseUrl}}/events/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "title": "Conférence Master SOA 2026",
+    "description": "Présentation des projets finaux.",
+    "date": "2026-06-20T09:00:00Z",
+    "location": "Amphi B, Faculté d'Informatique",
+    "capacity": 100,
+    "price": "0.00",
+    "category": "Education"
+}
+
+### 5. Inscription d'un Client
+# @name registerClient
+POST {{baseUrl}}/auth/register/
+Content-Type: application/json
+
+{
+    "email": "client.demo@billetix.dz",
+    "password": "password123",
+    "firstName": "Etudiant",
+    "lastName": "Test",
+    "role": "CLIENT"
+}
+
+### 6. Connexion Client
+# @name loginClient
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+    "email": "client.demo@billetix.dz",
+    "password": "password123"
+}
+
+@clientToken = {{loginClient.response.body.access}}
+
+### 7. Test RBAC (DOIT ÉCHOUER - 403)
+# Un client ne peut pas créer d'événement
+POST {{baseUrl}}/events/
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+    "title": "Tentative Fraude",
+    "description": "Ceci ne devrait pas passer.",
+    "date": "2026-01-01T00:00:00Z",
+    "location": "Inconnu",
+    "capacity": 100,
+    "price": "100.00",
+    "category": "Test"
+}
+
+### 8. Réservation (Preuve Communication Asynchrone RabbitMQ)
+# Remplacez eventId par un ID réel récupéré via GET /api/events/
+POST {{baseUrl}}/bookings/
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+    "eventId": "SUSTITUER_PAR_ID_REEL",
+    "quantity": 1
+}

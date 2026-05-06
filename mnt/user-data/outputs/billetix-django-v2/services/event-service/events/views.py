@@ -123,3 +123,22 @@ def event_detail(request, event_id):
         event.status = "CANCELLED"
         event.save()
         return JsonResponse({}, status=204)
+
+@csrf_exempt
+@require_http_methods(["PATCH"])
+def decrement_seats(request, event_id):
+    # This is an internal endpoint called by booking-service.
+    # In a real system, we'd use a service-to-service token.
+    # For now, we'll just check if the event exists and sufficient seats.
+    event = get_object_or_404(Event, id=event_id)
+    try:
+        body = json.loads(request.body)
+        quantity = body.get("quantity", 1)
+        if event.available_seats >= quantity:
+            event.available_seats -= quantity
+            event.save()
+            return JsonResponse({"id": str(event.id), "availableSeats": event.available_seats})
+        else:
+            return JsonResponse({"error": "Not enough seats"}, status=409)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)

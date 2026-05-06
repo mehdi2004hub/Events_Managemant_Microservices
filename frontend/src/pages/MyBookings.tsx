@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Calendar, MapPin, Loader2, Sparkles, LayoutDashboard } from 'lucide-react';
 import { bookingsApi, eventsApi } from '../services/api';

@@ -5,4 +5,5 @@ urlpatterns = [
     path('', views.event_list_create),
     path('health/', views.health),
     path('<uuid:event_id>/', views.event_detail),
+    path('<uuid:event_id>/decrement/', views.decrement_seats),
 ]

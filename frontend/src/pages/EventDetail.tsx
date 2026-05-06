@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, Users, Tag, ArrowLeft, Loader2, ShieldCheck, Ticket } from 'lucide-react';
+import { Calendar, MapPin, ArrowLeft, Loader2, ShieldCheck, Ticket } from 'lucide-react';
 import { eventsApi, bookingsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -152,26 +152,49 @@ const EventDetail = () => {
           className="lg:col-span-1"
         >
           <div className="glass-card p-8 sticky top-24">
-            <div className="flex items-center justify-between mb-8">
-              <span className="text-3xl font-bold text-white">{event.price} DA</span>
-              <div className={`px-2 py-1 rounded text-xs font-bold ${event.availableSeats > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                {event.availableSeats > 0 ? `${event.availableSeats} places` : 'COMPLET'}
-              </div>
+            <div className="flex items-center gap-3 mb-8">
+              <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border ${event.availableSeats > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                {event.availableSeats > 0 ? `${event.availableSeats} PLACES DISPONIBLES` : 'COMPLET - ÉPUISÉ'}
+              </span>
             </div>
 
             <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-400">Quantité</label>
-                <div className="flex items-center gap-4">
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-gray-400 uppercase tracking-wider block">
+                  Nombre de billets
+                </label>
+                <div className="flex items-center bg-white/5 rounded-2xl p-2 border border-white/5">
                   <button 
+                    type="button"
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white hover:bg-white/10"
-                  > - </button>
-                  <span className="text-xl font-bold text-white w-8 text-center">{quantity}</span>
+                    className="w-12 h-12 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors disabled:opacity-50"
+                    disabled={event.availableSeats === 0}
+                  >-</button>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max={event.availableSeats}
+                    value={quantity} 
+                    onChange={(e) => setQuantity(Math.min(event.availableSeats, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="flex-1 bg-transparent border-none text-center text-xl font-bold focus:outline-none"
+                    disabled={event.availableSeats === 0}
+                  />
                   <button 
+                    type="button"
                     onClick={() => setQuantity(Math.min(event.availableSeats, quantity + 1))}
-                    className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white hover:bg-white/10"
-                  > + </button>
+                    className="w-12 h-12 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors disabled:opacity-50"
+                    disabled={event.availableSeats === 0}
+                  >+</button>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-white/10">
+                <div className="flex items-end justify-between mb-8">
+                  <span className="text-sm font-bold text-gray-400 uppercase tracking-wider">Total</span>
+                  <div className="text-right">
+                    <span className="text-4xl font-black text-white leading-none">{parseFloat(event.price) * quantity}</span>
+                    <span className="text-indigo-400 ml-2 font-bold">DA</span>
+                  </div>
                 </div>
               </div>
 
@@ -199,10 +222,12 @@ const EventDetail = () => {
                   <button
                     disabled={bookingLoading || event.availableSeats === 0}
                     onClick={handleBooking}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-lg shadow-xl shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed group flex items-center justify-center gap-3 transition-all active:scale-95"
+                    className={`w-full py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 transition-all active:scale-95 ${event.availableSeats === 0 ? 'bg-white/5 text-gray-500 shadow-none' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white'}`}
                   >
                     {bookingLoading ? (
                       <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : event.availableSeats === 0 ? (
+                      <>ÉPUISÉ</>
                     ) : (
                       <>
                         <Ticket className="w-6 h-6 group-hover:rotate-12 transition-transform" />

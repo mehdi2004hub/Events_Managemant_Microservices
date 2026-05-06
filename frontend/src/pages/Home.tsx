@@ -18,6 +18,14 @@ const Home: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [category, setCategory] = useState('');
   const [loading, setLoading] = useState(true);
+  const [filterLive, setFilterLive] = useState(false);
+  
+  const displayEvents = events.filter(e => {
+    if (!filterLive) return true;
+    const evDate = new Date(e.date);
+    const today = new Date();
+    return evDate.toDateString() === today.toDateString();
+  });
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -83,7 +91,15 @@ const Home: React.FC = () => {
               />
             </div>
             
-            <div className="flex items-center gap-3 w-full md:w-auto pr-2">
+              <div className="flex items-center gap-3 w-full md:w-auto pr-2">
+              <button 
+                onClick={() => setFilterLive(!filterLive)}
+                className={`px-6 py-5 rounded-[24px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${filterLive ? 'bg-red-500/20 text-red-500 border border-red-500/50' : 'bg-white/5 text-fg-muted hover:text-white'}`}
+              >
+                <div className={`w-2 h-2 rounded-full ${filterLive ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`} />
+                Live
+              </button>
+              
               <div className="flex items-center gap-3 bg-white/5 px-8 py-5 rounded-[24px] w-full md:w-auto">
                 <Filter size={18} className="text-accent" />
                 <select 
@@ -139,7 +155,7 @@ const Home: React.FC = () => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
               </div>
-              {events.length} Live
+              {displayEvents.length} {filterLive ? 'Aujourd\'hui' : 'Disponibles'}
             </div>
           </div>
 
@@ -163,7 +179,7 @@ const Home: React.FC = () => {
                 animate={{ opacity: 1 }}
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 px-4"
               >
-                {events.map((event, idx) => {
+                {displayEvents.map((event, idx) => {
                   const asset = categoryAssets[event.category] || categoryAssets.default;
                   const Icon = asset.icon;
                   return (
@@ -237,16 +253,24 @@ const Home: React.FC = () => {
                             <span className="text-[9px] uppercase font-black text-fg-muted tracking-[0.2em] mb-1">Status</span>
                             <div className="flex items-center gap-2">
                               <span className={`w-2 h-2 rounded-full ${event.availableSeats > 0 ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
-                              <span className="text-xs font-black uppercase tracking-wider">{event.availableSeats > 0 ? 'Disponible' : 'Complet'}</span>
+                              <span className={`text-xs font-black uppercase tracking-wider ${event.availableSeats > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                {event.availableSeats > 0 ? `${event.availableSeats} places` : 'Complet'}
+                              </span>
                             </div>
                           </div>
-                          <Link 
-                            to={`/events/${event.id}`} 
-                            className="flex items-center gap-3 grad-bg text-white px-8 py-4 rounded-[20px] font-black shadow-xl hover:shadow-primary/40 transition-all hover:scale-105 active:scale-95 group/btn"
-                          >
-                            <span>RÉSERVER</span>
-                            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" strokeWidth={3} />
-                          </Link>
+                          {event.availableSeats > 0 ? (
+                            <Link 
+                              to={`/events/${event.id}`} 
+                              className="flex items-center gap-3 grad-bg text-white px-8 py-4 rounded-[20px] font-black shadow-xl hover:shadow-primary/40 transition-all hover:scale-105 active:scale-95 group/btn"
+                            >
+                              <span>RÉSERVER</span>
+                              <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" strokeWidth={3} />
+                            </Link>
+                          ) : (
+                            <div className="flex items-center gap-3 bg-white/5 text-fg-muted px-8 py-4 rounded-[20px] font-black cursor-not-allowed">
+                              <span>ÉPUISÉ</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>
